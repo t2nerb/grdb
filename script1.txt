@@ -1,0 +1,21 @@
+g n
+g e 3 1
+g e 3 6
+g e 6 1 
+g e 1 4
+g e 4 6
+g e 4 2
+g e 4 7
+g e 2 5
+g e 7 5
+g s e int i
+g t 3 1 i 2
+g t 3 6 i 3
+g t 6 1 i -2
+g t 1 4 i 5
+g t 4 6 i 2
+g t 4 2 i 2
+g t 4 7 i 3
+g t 2 5 i 7
+g t 7 5 i 5
+exit
