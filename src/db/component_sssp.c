@@ -279,6 +279,8 @@ int component_sssp (component_t c, vertexid_t v1, vertexid_t v2, int *n, int *to
     printf(" Cost: %d\n", distance[sindex]);
 
     // Cleanup
+    close(c->efd);
+    close(c->vfd);
     free(distance);
     free(vertices);
     free(visited);
