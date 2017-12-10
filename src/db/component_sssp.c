@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <limits.h>
+#include <string.h>
+#include <fcntl.h>
 #include "graph.h"
 #include "cli.h"
 
@@ -112,20 +114,24 @@ int get_weight_from_edge(component_t c, vertexid_t v1, vertexid_t v2, char* attr
 
     offset = tuple_get_offset(e1->tuple, attr_name);
     weight = tuple_get_int(e1->tuple->buf + offset);
+
     return weight;
 }
 
 
-void init_dijkstra(int nvertices, int sindex, int *costs, vertexid_t *parents)
+void init_dijkstra(int nvertices, int sindex, int *costs, vertexid_t *parents, int *visited)
 {
     for (int i = 0; i < nvertices; i++) {
+
+        visited[i] = 0;
+        parents[i] = (vertexid_t) INT_MAX;
+
         if (i == sindex) {
             costs[i] = 0;
         }
         else {
             costs[i] = INT_MAX;
         }
-        parents[i] = (vertexid_t) INT_MAX;
     }
 }
 
@@ -133,14 +139,15 @@ void init_dijkstra(int nvertices, int sindex, int *costs, vertexid_t *parents)
 int get_min_index(vertexid_t *vertices, int nvertices, int *costs, vertexid_t *parents, int *visited)
 {
     int mindex, min = INT_MAX;
+
     for (int i = 0; i < nvertices; i++) {
         if (visited[i] == 0 && costs[i] < min) {
             min = costs[i];
             mindex = i;
         }
     }
-    visited[mindex] = 1;
 
+    visited[mindex]++;
     return mindex;
 }
 
@@ -180,50 +187,60 @@ void print_shortest_path(vertexid_t *vertices, int nvertices, vertexid_t *parent
 int component_sssp (component_t c, vertexid_t v1, vertexid_t v2, int *n, int *total_weight, vertexid_t **path)
 {
     int nvertices;
+    int *visited, *costs, *distance;
+    vertexid_t *vertices, *parents;
+    attribute_t weight_attr;
 
     // File descriptors for vertices and edges
-    c->efd = edge_file_init(0, 0);
-    c->vfd = vertex_file_init(0, 0);
+    c->efd = open("/root/.grdb/0/0/e", O_RDWR | O_CREAT, 0644);
+    c->vfd = open("/root/.grdb/0/0/v", O_RDWR | O_CREAT, 0644);
 
     // Initialize variables to hold vertices and weights
     nvertices = count_vertices(c);
-    vertexid_t *vertices = malloc(nvertices * sizeof(vertexid_t));
-    vertexid_t *parents = malloc(nvertices * sizeof(vertexid_t));
-    int *visited = malloc(nvertices * sizeof(int));
-    int *costs = malloc(nvertices * sizeof(unsigned int));
-    int *distance = malloc(nvertices * sizeof(int));
+    vertices = malloc(nvertices * sizeof(vertexid_t));
+    parents = malloc(nvertices * sizeof(vertexid_t));
+    visited = malloc(nvertices * sizeof(int));
+    costs = malloc(nvertices * sizeof(unsigned int));
+    distance = malloc(nvertices * sizeof(int));
 
     // Figure out which attribute in the component edges schema you will
-	// use for your weight function (I USE INTS OBV)
-    attribute_t weight_attr = component_find_int_tuple(c->se->attrlist);
+    // use for your weight function (I USE INTS OBV)
+    weight_attr = component_find_int_tuple(c->se->attrlist);
     if (!weight_attr) {
-        printf("Could not find attribute of type INT\n");
+        printf(" ERROR: Could not find attribute of type INT\n");
         return -1;
     }
 
     // Get all vertices and check if v1, v2 are in the vertex set
     get_vertex_labels(c, vertices);
     if (!vertices_exist(vertices, nvertices, v1, v2)) {
-        printf("Source and destination must be in component\n");
+        printf(" ERROR: Source and destination must be in component\n");
         return -1;
     }
-
 
     //  Execute Dijkstra on the attribute you found for the specified
     //  component
 
+    int has_out_path, sindex, findex;
+
     // Get index for start/end vertices and initialize costs and parents
-    int sindex = get_index_by_id(vertices, nvertices, v1);
-    int findex = get_index_by_id(vertices, nvertices, v2);
-    init_dijkstra(nvertices, sindex, costs, parents);
+    sindex = get_index_by_id(vertices, nvertices, v1);
+    findex = get_index_by_id(vertices, nvertices, v2);
+    init_dijkstra(nvertices, sindex, costs, parents, visited);
 
     // Update cost for each of the adjacent nodes
+    has_out_path = 0;
     for (int i = 0; i < nvertices; i++) {
         int weight = get_weight_from_edge(c, vertices[sindex], vertices[i], weight_attr->name);
         if (weight != INT_MAX) {
             costs[i] = weight;
             parents[i] = vertices[sindex];
+            has_out_path++;
         }
+    }
+    if (!has_out_path) {
+        printf(" ERROR: %llu -> %llu does not exist!\n", v1, v2);
+        return -1;
     }
 
     // Flag sindex was visited
@@ -231,12 +248,14 @@ int component_sssp (component_t c, vertexid_t v1, vertexid_t v2, int *n, int *to
 
     while (not_all_visited(visited, nvertices)) {
 
-        // Get next lowest cost node that wasn't visited and flag in visited array
+        // Get next lowest cost node that wasn't visited and flag in visited
+        // array
         sindex = get_min_index(vertices, nvertices, costs, parents, visited);
         distance[sindex] = costs[sindex];
         if (sindex == findex) break;
 
         // Update costs for adjacent nodes and relax do noods
+        has_out_path = 0;
         for (int i = 0; i < nvertices; i++) {
             int weight = get_weight_from_edge(c, vertices[sindex], vertices[i], weight_attr->name);
             if (weight != INT_MAX) {
@@ -245,8 +264,13 @@ int component_sssp (component_t c, vertexid_t v1, vertexid_t v2, int *n, int *to
                     costs[i] = total_weight;
                     parents[i] = vertices[sindex];
                 }
+                has_out_path++;
             }
 
+        }
+        if (!has_out_path) {
+            printf(" ERROR: %llu -> %llu does not exist!\n", v1, v2);
+            return -1;
         }
 
     }
