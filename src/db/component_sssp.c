@@ -160,7 +160,7 @@ int not_all_visited(int *visited, int nvertices)
     return 0;
 }
 
-void print_shortest_path(vertexid_t *vertices, int nvertices, vertexid_t *parents, vertexid_t v1, vertexid_t v2)
+int print_shortest_path(vertexid_t *vertices, int nvertices, vertexid_t *parents, vertexid_t v1, vertexid_t v2, vertexid_t *path)
 {
     vertexid_t sssp[nvertices];
     vertexid_t current_node = v2;
@@ -172,15 +172,26 @@ void print_shortest_path(vertexid_t *vertices, int nvertices, vertexid_t *parent
         current_node = parents[nindex];
     }
 
+    path = malloc(ctr * sizeof(vertexid_t));
+
     printf(" Shortest Path: ");
+    int nctr = 0;
     for (int i = ctr-1; i >= 0; i--) {
+
+        path[nctr] = sssp[i];
+
         if (i > 0) {
-            printf(" %llu ->", sssp[i]);
+            printf(" %llu ->", path[nctr]);
         }
         else {
-            printf(" %llu\n", sssp[i]);
+            printf(" %llu\n", path[nctr]);
         }
+
+        nctr++;
+
     }
+
+    return ctr;
 
 }
 
@@ -275,8 +286,10 @@ int component_sssp (component_t c, vertexid_t v1, vertexid_t v2, int *n, int *to
 
     }
 
-    print_shortest_path(vertices, nvertices, parents, v1, v2);
-    printf(" Cost: %d\n", distance[sindex]);
+    *n = print_shortest_path(vertices, nvertices, parents, v1, v2, *path);
+    *total_weight = distance[sindex];
+    printf(" Cost: %d\n", *total_weight);
+    printf(" Number of nodes in path: %d\n", *n);
 
     // Cleanup
     close(c->efd);
@@ -287,6 +300,6 @@ int component_sssp (component_t c, vertexid_t v1, vertexid_t v2, int *n, int *to
     free(parents);
     free(costs);
 
-    // I do what I want
-    return 1;
+    // I pay to contribute to open source projects
+    return 0;
 }
