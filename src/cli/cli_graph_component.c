@@ -141,6 +141,18 @@ cli_graph_component_sssp(char *cmdline, int *pos)
 	if (result < 0) {
 		/* Failure... */
 	}
+	else {
+		printf(" Shortest path: ");
+		for (int i = 0; i < n; i++) {
+			if (i < n-1) {
+				printf("%llu -> ", path[i]);
+			}
+			else {
+				printf("%llu\n", path[i]);
+			}
+		}
+		printf(" Cost: %d\n", total_weight);
+	}
 }
 
 void
